@@ -10,18 +10,8 @@ Arguments:
 Returns:
 - BMPS: Random bosonic MPS
 """
-function random_bmps(sites::Vector{<:ITensors.Index}, alg::Truncated; kwargs...)
-    new_kwargs = Dict{Symbol, Any}()
-    
-    for (key, value) in kwargs
-        if key == :linkdim
-            new_kwargs[:linkdims] = value
-        else
-            new_kwargs[key] = value
-        end
-    end
-    
-    mps = ITensorMPS.randomMPS(sites; new_kwargs...)
+function random_bmps(sites::Vector{<:ITensors.Index}, alg::Truncated; linkdims = 1)
+    mps = ITensorMPS.randomMPS(sites; linkdims)
     return BMPS(mps, alg)
 end
 
