@@ -1,5 +1,38 @@
 Matrix product state backend for simulating bosonic systems.
 
+States to implement:
+```
+vacuumstate
+thermalstate
+coherentstate
+squeezedstate
+eprstate
+fockstate
+gkpstate
+catstate
+```
+Gates to implement:
+```
+displace
+squeeze
+twosqueeze
+kerr
+cubic
+number
+create
+destroy
+beamsplitter
+```
+Measurement operators to implement:
+```
+homodyne
+generaldyne
+heterodyne
+count (photon counting, maybe there's a better name)
+threshold (zero photons or nonzero photons)
+
+```
+
 ## References
 
 ### Review Articles
