@@ -1,6 +1,8 @@
 Matrix product state backend for simulating bosonic systems.
 
-States to implement:
+## Interface Plans
+
+State methods:
 ```
 vacuumstate
 thermalstate
@@ -11,7 +13,7 @@ fockstate
 gkpstate
 catstate
 ```
-Gates to implement:
+Gate methods:
 ```
 displace
 squeeze
@@ -23,14 +25,13 @@ create
 destroy
 beamsplitter
 ```
-Measurement operators to implement:
+Measurement methods:
 ```
 homodyne
 generaldyne
 heterodyne
 count (photon counting, maybe there's a better name)
 threshold (zero photons or nonzero photons)
-
 ```
 
 ## References
