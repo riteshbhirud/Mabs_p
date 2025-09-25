@@ -1,5 +1,39 @@
 Matrix product state backend for simulating bosonic systems.
 
+## Interface Plans
+
+State methods:
+```
+vacuumstate
+thermalstate
+coherentstate
+squeezedstate
+eprstate
+fockstate
+gkpstate
+catstate
+```
+Gate methods:
+```
+displace
+squeeze
+twosqueeze
+kerr
+cubic
+number
+create
+destroy
+beamsplitter
+```
+Measurement methods:
+```
+homodyne
+generaldyne
+heterodyne
+count (photon counting, maybe there's a better name)
+threshold (zero photons or nonzero photons)
+```
+
 ## References
 
 ### Review Articles
