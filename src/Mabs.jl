@@ -2,25 +2,29 @@ module Mabs
 
 import ITensorMPS
 import ITensors
+import ITensorMPS: add
 import LinearAlgebra
+import QuantumInterface: coherentstate, displace, squeeze, vacuumstate, create, destroy, number
 
 # core types
 export BMPS, BMPO, MabsAlg
 export Truncated, PseudoSite, LocalBasis
 
 #  algorithms  
-export dmrg, tebd!, tebd, tdvp!, tdvp
+export dmrg, tebd!, tebd, tdvp
 
 #  constructors
-export bosonic_sites, random_bmps, bosonic_product_mps, bosonic_mpo_from_opsum
-export vacuum_mps, coherent_state_mps
+export random_bmps
+export vacuumstate, coherentstate
 
 #  operators
-export creation_op, annihilation_op, number_op
-export displacement_op, squeezing_op, kerr_evolution_op
-export build_harmonic_chain_mpo, build_kerr_chain_mpo
+export create, destroy, number
+export displace, squeeze, kerr
+export harmonic_chain, kerr
 export build_trotter_gates, build_evolution_gate  
 export safe_factorial
+export add
+
 
 
 include("algs.jl")

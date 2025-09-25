@@ -16,64 +16,7 @@ function random_bmps(sites::Vector{<:ITensors.Index}, alg::Truncated; linkdims =
 end
 
 """
-    bosonic_product_mps(sites::Vector{<:ITensors.Index}, states::Vector, alg::Truncated)
-
-Create a product state BMPS from a vector of local state specifications.
-
-Arguments:
-- sites::Vector{<:ITensors.Index}: Vector of site indices
-- states::Vector: Vector of state specifications (integers for Fock states)
-- alg::Truncated: Algorithm specification
-
-Returns:
-- BMPS: Product state bosonic MPS
-"""
-function bosonic_product_mps(sites::Vector{<:ITensors.Index}, states::Vector, alg::Truncated)
-    mps = ITensorMPS.productMPS(sites, states)
-    return BMPS(mps, alg)
-end
-
-"""
-    bosonic_mpo_from_opsum(opsum::ITensors.OpSum, sites::Vector{<:ITensors.Index}, alg::Truncated)
-
-Create a bosonic MPO from an OpSum using the Truncated algorithm.
-
-Arguments:
-- opsum::ITensors.OpSum: Operator sum specification
-- sites::Vector{<:ITensors.Index}: Vector of site indices  
-- alg::Truncated: Algorithm specification
-
-Returns:
-- BMPO: Bosonic MPO constructed from OpSum
-"""
-function bosonic_mpo_from_opsum(opsum::ITensors.OpSum, sites::Vector{<:ITensors.Index}, alg::Truncated)
-    mpo = ITensorMPS.MPO(opsum, sites)
-    return BMPO(mpo, alg)
-end
-
-"""
-    bosonic_sites(N::Int, max_occ::Int; conserve_qns::Bool=false)
-
-Create a vector of bosonic site indices with proper SiteType.
-
-Arguments:
-- N::Int: Number of sites
-- max_occ::Int: Maximum occupation number per site
-- conserve_qns::Bool: Whether to conserve quantum numbers (default: false)
-
-Returns:
-- Vector{ITensors.Index}: Vector of bosonic site indices
-"""
-function bosonic_sites(N::Int, max_occ::Int; conserve_qns::Bool=false)
-    if conserve_qns
-        return ITensors.siteinds("Boson", N; dim=max_occ+1, conserve_qns=true)
-    else
-        return ITensors.siteinds("Boson", N; dim=max_occ+1)
-    end
-end
-
-"""
-    vacuum_mps(sites::Vector{<:ITensors.Index}, alg::Truncated)
+    vacuumstate(sites::Vector{<:ITensors.Index}, alg::Truncated)
 
 Create a vacuum state |0,0,...,0⟩ BMPS.
 
@@ -84,14 +27,14 @@ Arguments:
 Returns:
 - BMPS: Vacuum state bosonic MPS
 """
-function vacuum_mps(sites::Vector{<:ITensors.Index}, alg::Truncated)
+function vacuumstate(sites::Vector{<:ITensors.Index}, alg::Truncated)
     states = fill(1, length(sites))
-    return bosonic_product_mps(sites, states, alg)
+    return BMPS(sites, states, alg)  
 end
 
 """
-    coherent_state_mps(sites::Vector{<:ITensors.Index}, α::Number, alg::Truncated)
-    coherent_state_mps(sites::Vector{<:ITensors.Index}, αs::Vector{<:Number}, alg::Truncated)
+    coherentstate(sites::Vector{<:ITensors.Index}, α::Number, alg::Truncated)
+    coherentstate(sites::Vector{<:ITensors.Index}, αs::Vector{<:Number}, alg::Truncated)
 
 Create an approximate coherent state BMPS using truncated expansion.
 
@@ -104,12 +47,12 @@ Arguments:
 Returns:
 - BMPS: Coherent state bosonic MPS (approximated by truncation)
 """
-function coherent_state_mps(sites::Vector{<:ITensors.Index}, α::Number, alg::Truncated)
+function coherentstate(sites::Vector{<:ITensors.Index}, α::Number, alg::Truncated)
     αs = fill(α, length(sites))
-    return coherent_state_mps(sites, αs, alg)
+    return coherentstate(sites, αs, alg)
 end
 
-function coherent_state_mps(sites::Vector{<:ITensors.Index}, αs::Vector{<:Number}, alg::Truncated)
+function coherentstate(sites::Vector{<:ITensors.Index}, αs::Vector{<:Number}, alg::Truncated)
     N = length(sites)
     length(αs) == N || error("Number of amplitudes ($(length(αs))) must match number of sites ($N)")
     tensors = ITensors.ITensor[]

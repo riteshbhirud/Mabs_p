@@ -1,6 +1,6 @@
 """
 Time Evolution Block Decimation (TEBD) functions for bosonic MPS.
-Production-ready implementation using direct mathematical gate construction.
+Using direct mathematical gate construction.
 """
 
 """
@@ -47,7 +47,7 @@ end
     build_evolution_gate(sites::Vector{<:ITensors.Index}, gate_type::String, params::NamedTuple, dt::Real)
 
 Build a single evolution gate exp(-i*dt*H) using direct mathematical construction.
-This is the primary, production-ready interface for gate construction.
+Interface for gate construction.
 
 # Arguments
 - `sites::Vector{<:ITensors.Index}`: Vector of site indices
@@ -246,20 +246,20 @@ function build_trotter_gates(
 end
 
 """
-    tdvp!(psi::BMPS{<:ITensorMPS.MPS,Truncated}, H::BMPO{<:ITensorMPS.MPO,Truncated}, dt::Number; kwargs...)
-
-Perform time evolution using Time Dependent Variational Principle (TDVP) algorithm (in-place version).
-"""
-function tdvp!(psi::BMPS{<:ITensorMPS.MPS,Truncated}, H::BMPO{<:ITensorMPS.MPO,Truncated}, dt::Number; kwargs...)
-    evolved_mps = ITensorMPS.tdvp(H.mpo, dt, psi.mps; kwargs...)
-    psi.mps = evolved_mps
-    return psi
-end
-
-"""
     tdvp(psi::BMPS{<:ITensorMPS.MPS,Truncated}, H::BMPO{<:ITensorMPS.MPO,Truncated}, dt::Number; kwargs...)
 
-Perform time evolution using Time Dependent Variational Principle (TDVP) algorithm (non-mutating version).
+Perform time evolution using Time Dependent Variational Principle (TDVP) algorithm.
+
+Arguments:
+- psi::BMPS: Input bosonic MPS
+- H::BMPO: Hamiltonian as bosonic MPO
+- dt::Number: Time step
+
+Keyword Arguments:
+- kwargs...: Additional parameters passed to ITensorMPS.tdvp
+
+Returns:
+- BMPS: Time-evolved bosonic MPS
 """
 function tdvp(psi::BMPS{<:ITensorMPS.MPS,Truncated}, H::BMPO{<:ITensorMPS.MPO,Truncated}, dt::Number; kwargs...)
     evolved_mps = ITensorMPS.tdvp(H.mpo, dt, psi.mps; kwargs...)
