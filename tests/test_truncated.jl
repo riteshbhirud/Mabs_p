@@ -243,9 +243,9 @@ end
         @test psi_evolved isa BMPS{<:ITensorMPS.MPS,Truncated}
         @test psi_evolved !== psi0
         
-        psi_inplace = copy(psi0)
-        tebd!(psi_inplace, id_gate)
-        @test abs(norm(psi_inplace) - 1.0) < 1e-10  
+        psi_evolved = copy(psi0)
+        psi_evolved = tebd(psi_evolved, id_gate)
+        @test abs(norm(psi_evolved) - 1.0) < 1e-10
     end
     
     @testset "TDVP Evolution" begin
@@ -349,282 +349,29 @@ end
 
     @testset "TEBD Tests" begin
     
-    @testset "Direct Gate Construction" begin
-        N = 4
-        max_occ = 5
-        sites = ITensors.siteinds("Boson", N; dim=max_occ+1)
-        dt = 0.01
-        
-        @testset "Number operator gates" begin
-            ω = 1.0
-            
-            gate_n = build_evolution_gate(sites, "number", (site=1, omega=ω), dt)
-            @test gate_n isa ITensors.ITensor
-            @test ITensors.hasinds(gate_n, sites[1]', sites[1])
-            
-            site = sites[1]
-            dim = ITensors.dim(site)
-            elements = []
-            for i in 1:dim
-                push!(elements, gate_n[site'=>i, site=>i])
-            end
-            
-
-            @test !(all(x -> isapprox(x, elements[1]), elements))
-            
-            expected_0 = exp(-1im * ω * dt * 0) 
-            expected_1 = exp(-1im * ω * dt * 1)  
-            
-            @test abs(elements[1] - expected_0) < 1e-12
-            @test abs(elements[2] - expected_1) < 1e-12
-        end
-        
-        @testset "Hopping gates" begin
-            J = 0.1
-            
-            gate_hop = build_evolution_gate(sites, "hopping", (sites=[1, 2], J=J), dt)
-            @test gate_hop isa ITensors.ITensor
-            @test ITensors.hasinds(gate_hop, sites[1]', sites[1], sites[2]', sites[2])
-            
-            site1, site2 = sites[1], sites[2]
-            off_diag_element = gate_hop[site1'=>1, site2'=>2, site1=>2, site2=>1]  
-            @test abs(off_diag_element) > 1e-10  
-        end
-        
-        @testset "Kerr gates" begin
-            χ = 0.1
-            
-            gate_kerr = build_evolution_gate(sites, "kerr", (site=1, chi=χ), dt)
-            @test gate_kerr isa ITensors.ITensor
-            @test ITensors.hasinds(gate_kerr, sites[1]', sites[1])
-            
-            site = sites[1]
-            dim = ITensors.dim(site)
-            
-            for n in 0:(dim-1)
-                expected = exp(-1im * χ * dt * n^2)
-                actual = gate_kerr[site'=>(n+1), site=>(n+1)]
-                @test abs(actual - expected) < 1e-12
-            end
-        end
-    end
-    
-    @testset "Trotter Gate Construction" begin
-        N = 3
-        max_occ = 5
-        sites = ITensors.siteinds("Boson", N; dim=max_occ+1)
-        dt = 0.02
-        
-        @testset "Simple Hamiltonian" begin
-            H_terms = [
-                ("number", (site=1, omega=1.0)),
-                ("number", (site=2, omega=1.0)),
-                ("number", (site=3, omega=1.0)),
-                ("hopping", (sites=[1,2], J=0.5)),
-                ("hopping", (sites=[2,3], J=0.5))
-            ]
-            
-            for order in [1, 2, 4]
-                gates = build_trotter_gates(sites, H_terms, dt; order=order)
-                @test gates isa Vector{ITensors.ITensor}
-                @test !isempty(gates)
-                
-                for gate in gates
-                    @test gate isa ITensors.ITensor
-                end
-            end
-        end
-        
-        @testset "Kerr chain" begin
-            H_terms = [
-                ("number", (site=1, omega=1.0)),
-                ("kerr", (site=1, chi=0.1)),
-                ("number", (site=2, omega=1.0)),
-                ("kerr", (site=2, chi=0.1)),
-                ("number", (site=3, omega=1.0)),
-                ("kerr", (site=3, chi=0.1))
-            ]
-            
-            gates = build_trotter_gates(sites, H_terms, dt; order=2)
-            @test length(gates) == 2 * length(H_terms)  
-        end
-    end
-    
-    @testset "Evolution with New Interface" begin
-        N = 3
-        max_occ = 5
-        sites = ITensors.siteinds("Boson", N; dim=max_occ+1)
-        
-        @testset "Harmonic chain evolution" begin
-            dt = 0.02
-            
-            H_terms = [
-                ("number", (site=1, omega=0.1)),
-                ("number", (site=2, omega=0.1)),
-                ("number", (site=3, omega=0.1)),
-                ("hopping", (sites=[1,2], J=0.5)),
-                ("hopping", (sites=[2,3], J=0.5))
-            ]
-            
-            gates = build_trotter_gates(sites, H_terms, dt; order=2)
-            
-            psi0 = BMPS(sites, [2, 1, 1], Truncated())  # |1,0,0⟩
-            normalize!(psi0)
-            
-            psi = copy(psi0)
-            n_steps = 25
-            
-            for step in 1:n_steps
-                tebd!(psi, gates)
-                
-                @test abs(norm(psi) - 1.0) < 1e-8
-            end
-            
-            total_particles = 0.0
-            for i in 1:N
-                expectation = real(ITensorMPS.expect(psi.mps, "N"; sites=i))
-                total_particles += expectation
-            end
-            @test abs(total_particles - 1.0) < 1e-6
-            
-            particle_on_first = real(ITensorMPS.expect(psi.mps, "N"; sites=1))
-            
-            @test particle_on_first < 0.95
-            
-            particle_on_second = real(ITensorMPS.expect(psi.mps, "N"; sites=2))
-            particle_on_third = real(ITensorMPS.expect(psi.mps, "N"; sites=3))
-            
-            @test (particle_on_second + particle_on_third) > 0.05
-        end
-        
-        @testset "Kerr evolution" begin
-            sites_single = ITensors.siteinds("Boson", 1; dim=9)
-            
-            χ = 0.2
-            dt = 0.02
-            
-            H_terms = [("kerr", (site=1, chi=χ))]
-            gates = build_trotter_gates(sites_single, H_terms, dt; order=1)
-            
-            α = 1.0
-            psi_coherent = coherentstate(sites_single, α, Truncated())
-            normalize!(psi_coherent)
-            
-            psi_evolved = copy(psi_coherent)
-            for step in 1:30
-                tebd!(psi_evolved, gates)
-            end
-            
-            @test abs(norm(psi_evolved) - 1.0) < 1e-8
-            
-            n_initial = real(ITensorMPS.expect(psi_coherent.mps, "N"; sites=1))
-            n_final = real(ITensorMPS.expect(psi_evolved.mps, "N"; sites=1))
-            @test abs(n_final - n_initial) < 1e-5
-            
-            overlap = abs(dot(psi_coherent, psi_evolved))
-            @test overlap < 0.95
-        end
-        
-        @testset "Simple number operator evolution" begin
-            sites_single =ITensors.siteinds("Boson", 1; dim=5)
-            
-            ω = 1.0
-            dt = 0.1
-            
-            gate_n = build_evolution_gate(sites_single, "number", (site=1, omega=ω), dt)
-            
-            psi_one = BMPS(sites_single, [2], Truncated())  
-            normalize!(psi_one)
-            
-            psi_evolved = tebd(psi_one, gate_n)
-            
-            @test abs(norm(psi_evolved) - 1.0) < 1e-10
-            
-            n_initial = real(ITensorMPS.expect(psi_one.mps, "N"; sites=1))
-            n_final = real(ITensorMPS.expect(psi_evolved.mps, "N"; sites=1))
-            @test abs(n_final - n_initial) < 1e-10
-            
-            overlap = dot(psi_one, psi_evolved)
-            expected_phase = exp(-1im * ω * dt * 1)  
-            @test abs(overlap - expected_phase) < 1e-10
-        end
-    end
-    
-    @testset "Gate Properties" begin
+    @testset "TEBD Evolution" begin
+        N = 2
         max_occ = 4
-        sites = ITensors.siteinds("Boson", 1; dim=max_occ+1)
-        dt = 0.1
+        sites = ITensors.siteinds("Boson", N; dim=max_occ+1)
         
-        @testset "Unitarity check" begin
-            gate_n = build_evolution_gate(sites, "number", (site=1, omega=1.0), dt)
+        @testset "Basic evolution with identity gate" begin
+            psi = vacuumstate(sites, Truncated())
+            id_gate = ITensors.op("Id", sites[1])
             
-            site = sites[1]
-            dim = ITensors.dim(site)
-            
-            for n in 1:min(3, dim) 
-                state_vec = zeros(ComplexF64, dim)
-                state_vec[n] = 1.0
-                
-                state_tensor = ITensors.ITensor(state_vec, site)
-                evolved_state = gate_n * state_tensor
-                
-                original_norm = norm(state_tensor)
-                evolved_norm = norm(evolved_state)
-                @test abs(evolved_norm - original_norm) < 1e-10
-            end
-            
-            gate_reverse = build_evolution_gate(sites, "number", (site=1, omega=1.0), -dt)
-            
-            test_state = ITensors.ITensor(ComplexF64, site)
-            test_state[site=>1] = 1.0  
-            
-            evolved_forward = gate_n * test_state
-            evolved_back = gate_reverse * evolved_forward
-            
-            overlap = abs(ITensors.scalar(ITensors.dag(test_state) * evolved_back))
-            @test abs(overlap - 1.0) < 1e-10
+            psi_evolved = tebd(psi, id_gate)
+            @test psi_evolved isa BMPS{<:ITensorMPS.MPS,Truncated}
+            @test abs(norm(psi_evolved) - 1.0) < 1e-10
         end
         
-        @testset "Time reversal symmetry" begin
-            gate_forward = build_evolution_gate(sites, "number", (site=1, omega=1.0), dt)
-            gate_backward = build_evolution_gate(sites, "number", (site=1, omega=1.0), -dt)
+        @testset "Evolution preserves normalization" begin
+            psi = random_bmps(sites, Truncated(); linkdims=2)
+            normalize!(psi)
+            n_op = number(sites[1])
+            dt = 0.01
+            gate = exp(-1im * dt * n_op)
             
-            vac = vacuumstate(sites, Truncated())
-            state1 = tebd(vac, gate_forward)
-            state2 = tebd(state1, gate_backward)
-            
-            overlap = abs(dot(vac, state2))
-            @test overlap > 0.999
-        end
-    end
-    
-    @testset "Input Validation" begin
-        sites = ITensors.siteinds("Boson", 3; dim=5)
-        dt = 0.01
-        
-        @testset "build_evolution_gate validation" begin
-            @test_throws ArgumentError build_evolution_gate(sites, "invalid", (site=1,), dt)
-            
-            @test_throws ArgumentError build_evolution_gate(sites, "number", (site=0, omega=1.0), dt)
-            @test_throws ArgumentError build_evolution_gate(sites, "number", (site=5, omega=1.0), dt)
-            
-            @test_throws ArgumentError build_evolution_gate(sites, "hopping", (sites=[1], J=1.0), dt) 
-            @test_throws ArgumentError build_evolution_gate(sites, "hopping", (sites=[1,1], J=1.0), dt) 
-            
-            @test_throws DomainError build_evolution_gate(sites, "number", (site=1, omega=1.0), Inf)
-            @test_throws DomainError build_evolution_gate(sites, "number", (site=1, omega=1.0), NaN)
-        end
-        
-        @testset "build_trotter_gates validation" begin
-            @test_throws ArgumentError build_trotter_gates(ITensors.Index[], [], dt)
-            @test_throws ArgumentError build_trotter_gates(sites, [], dt)
-            
-            H_terms = [("number", (site=1, omega=1.0))]
-            @test_throws ArgumentError build_trotter_gates(sites, H_terms, dt; order=3)
-            @test_throws ArgumentError build_trotter_gates(sites, H_terms, dt; order=0)
-            
-            @test_throws ArgumentError build_trotter_gates(sites, ["invalid"], dt)
-            @test_throws ArgumentError build_trotter_gates(sites, [(1, 2, 3)], dt) 
+            psi_evolved = tebd(psi, gate)
+            @test abs(norm(psi_evolved) - 1.0) < 1e-8
         end
     end
     
@@ -642,9 +389,466 @@ end
         @test psi_evolved isa BMPS{<:ITensorMPS.MPS,Truncated}
         @test psi_evolved !== psi
         
-        psi_inplace = copy(psi)
-        tebd!(psi_inplace, id_gate)
-        @test abs(norm(psi_inplace) - 1.0) < 1e-10
+        psi_evolved = copy(psi)
+        psi_evolved = tebd(psi_evolved, id_gate)
+        @test abs(norm(psi_evolved) - 1.0) < 1e-10
+    end
+end
+
+@testset "BMPS Advanced Operations" begin
+    N = 3
+    max_occ = 5
+    sites = ITensors.siteinds("Boson", N; dim=max_occ+1)
+    
+    @testset "Orthogonalization" begin
+        psi = random_bmps(sites, Truncated(); linkdims=4)
+        
+        for j in 1:N
+            psi_ortho = orthogonalize(psi, j)
+            @test psi_ortho isa BMPS{<:ITensorMPS.MPS,Truncated}
+            @test abs(norm(psi_ortho) - norm(psi)) < 1e-10
+        end
+        
+        psi_copy = copy(psi)
+        orthogonalize!(psi_copy, 2)
+        @test psi_copy isa BMPS{<:ITensorMPS.MPS,Truncated}
+    end
+    
+    @testset "Truncation" begin
+        psi = random_bmps(sites, Truncated(); linkdims=10)
+        
+        psi_truncated = truncate(psi; maxdim=5)
+        @test psi_truncated isa BMPS{<:ITensorMPS.MPS,Truncated}
+        @test maxlinkdim(psi_truncated) <= 5
+        
+        psi_copy = copy(psi)
+        truncate!(psi_copy; maxdim=5)
+        @test maxlinkdim(psi_copy) <= 5
+    end
+    
+    @testset "Addition with truncation" begin
+        psi1 = random_bmps(sites, Truncated(); linkdims=3)
+        psi2 = random_bmps(sites, Truncated(); linkdims=3)
+        
+        psi_sum = psi1 + psi2
+        @test psi_sum isa BMPS{<:ITensorMPS.MPS,Truncated}
+        
+        psi_sum_trunc = add(psi1, psi2; maxdim=5, cutoff=1e-10)
+        @test maxlinkdim(psi_sum_trunc) <= 5
+    end
+    
+    @testset "Outer product" begin
+        psi1 = random_bmps(sites, Truncated(); linkdims=2)
+        psi2 = random_bmps(sites, Truncated(); linkdims=2)
+        
+        rho = outer(psi1, psi2)
+        @test rho isa BMPO{<:ITensorMPS.MPO,Truncated}
+        @test length(rho) == N
+    end
+    
+    @testset "Indexing and iteration" begin
+        psi = random_bmps(sites, Truncated(); linkdims=2)
+        
+        @test psi[1] isa ITensors.ITensor
+        @test psi[end] isa ITensors.ITensor
+        
+        count = 0
+        for tensor in psi
+            @test tensor isa ITensors.ITensor
+            count += 1
+        end
+        @test count == N
+        
+        old_tensor = psi[1]
+        psi[1] = old_tensor
+        @test psi[1] == old_tensor
+    end
+end
+
+@testset "BMPO Advanced Operations" begin
+    N = 3
+    max_occ = 5
+    sites = ITensors.siteinds("Boson", N; dim=max_occ+1)
+    
+    @testset "BMPO copy operations" begin
+        opsum = ITensors.OpSum()
+        for i in 1:N
+            opsum += 1.0, "N", i
+        end
+        H = BMPO(opsum, sites, Truncated())
+        
+        H_copy = copy(H)
+        @test H_copy !== H
+        @test H_copy.mpo !== H.mpo
+        
+        H_deep = deepcopy(H)
+        @test H_deep !== H
+        @test H_deep.mpo !== H.mpo
+    end
+    
+    @testset "BMPO truncation" begin
+        opsum = ITensors.OpSum()
+        for i in 1:N
+            opsum += 1.0, "N", i
+        end
+        H = BMPO(opsum, sites, Truncated())
+        
+        H_trunc = truncate(H; maxdim=10)
+        @test H_trunc isa BMPO{<:ITensorMPS.MPO,Truncated}
+        
+        H_copy = copy(H)
+        truncate!(H_copy; maxdim=10)
+        @test H_copy isa BMPO{<:ITensorMPS.MPO,Truncated}
+    end
+    
+    @testset "BMPO addition" begin
+        opsum1 = ITensors.OpSum()
+        opsum2 = ITensors.OpSum()
+        for i in 1:N
+            opsum1 += 1.0, "N", i
+            opsum2 += 0.5, "N", i
+        end
+        
+        H1 = BMPO(opsum1, sites, Truncated())
+        H2 = BMPO(opsum2, sites, Truncated())
+        
+        H_sum = H1 + H2
+        @test H_sum isa BMPO{<:ITensorMPS.MPO,Truncated}
+        
+        H_sum_trunc = add(H1, H2; maxdim=20)
+        @test H_sum_trunc isa BMPO{<:ITensorMPS.MPO,Truncated}
+    end
+    
+    @testset "BMPO-BMPS operations" begin
+        opsum = ITensors.OpSum()
+        for i in 1:N
+            opsum += 1.0, "N", i
+        end
+        H = BMPO(opsum, sites, Truncated())
+        psi = random_bmps(sites, Truncated(); linkdims=4)
+        
+        result = contract(H, psi)
+        @test result isa BMPS{<:ITensorMPS.MPS,Truncated}
+        
+        result2 = ITensors.apply(H, psi; maxdim=10)
+        @test result2 isa BMPS{<:ITensorMPS.MPS,Truncated}
+    end
+    
+    @testset "BMPO indexing" begin
+        opsum = ITensors.OpSum()
+        for i in 1:N
+            opsum += 1.0, "N", i
+        end
+        H = BMPO(opsum, sites, Truncated())
+        
+        @test H[1] isa ITensors.ITensor
+        @test H[end] isa ITensors.ITensor
+        
+        count = 0
+        for tensor in H
+            @test tensor isa ITensors.ITensor
+            count += 1
+        end
+        @test count == N
+    end
+end
+
+@testset "Operator Completeness" begin
+    max_occ = 5
+    sites = ITensors.siteinds("Boson", 1; dim=max_occ+1)
+    site = sites[1]
+    
+    @testset "Squeeze operator" begin
+        ξ = 0.5
+        S = squeeze(site, ξ)
+        @test S isa ITensors.ITensor
+        @test ITensors.hasinds(S, site', site)
+        
+        vac = vacuumstate(sites, Truncated())
+        squeezed = ITensors.apply(S, vac.mps)
+        @test squeezed isa ITensorMPS.MPS
+    end
+    
+    @testset "Kerr single-site operator" begin
+        χ = 0.1
+        t = 0.5
+        K = kerr(site, χ, t)
+        @test K isa ITensors.ITensor
+        @test ITensors.hasinds(K, site', site)
+        
+        for n in 0:max_occ
+            expected_phase = exp(-1im * χ * t * n^2)
+            actual = K[site'=>(n+1), site=>(n+1)]
+            @test abs(actual - expected_phase) < 1e-12
+        end
+    end
+    
+    @testset "ITensor op definitions" begin
+        n_op = ITensors.op("N", site)
+        @test n_op isa ITensors.ITensor
+        
+        a_dag_op = ITensors.op("Adag", site)
+        @test a_dag_op isa ITensors.ITensor
+        
+        a_op = ITensors.op("A", site)
+        @test a_op isa ITensors.ITensor
+    end
+    
+    @testset "safe_factorial" begin
+        @test safe_factorial(5) == 120
+        @test safe_factorial(0) == 1
+        @test safe_factorial(20) == factorial(20)
+        @test safe_factorial(21) isa BigInt
+    end
+end
+
+@testset "TEBD/TDVP Edge Cases" begin
+    N = 2
+    max_occ = 5
+    sites = ITensors.siteinds("Boson", N; dim=max_occ+1)
+    
+    @testset "TEBD with multiple gates" begin
+        psi = random_bmps(sites, Truncated(); linkdims=4)
+        normalize!(psi)
+        
+        gates = ITensors.ITensor[]
+        for i in 1:N
+            n_op = number(sites[i])
+            gate = exp(-1im * 0.01 * n_op)
+            push!(gates, gate)
+        end
+        
+        psi_evolved = tebd(psi, gates)
+        @test psi_evolved isa BMPS{<:ITensorMPS.MPS,Truncated}
+        @test abs(norm(psi_evolved) - 1.0) < 1e-8
+    end
+    
+    @testset "TEBD with truncation" begin
+        psi = random_bmps(sites, Truncated(); linkdims=10)
+        gate = ITensors.op("Id", sites[1])
+        
+        psi_evolved = tebd(psi, gate; maxdim=5, cutoff=1e-10)
+        @test psi_evolved isa BMPS{<:ITensorMPS.MPS,Truncated}
+    end
+    
+    @testset "TDVP with parameters" begin
+        H = harmonic_chain(sites; ω=1.0)
+        psi = random_bmps(sites, Truncated(); linkdims=4)
+        normalize!(psi)
+        
+        psi_evolved = Mabs.tdvp(psi, H, 0.1; cutoff=1e-10)
+        @test psi_evolved isa BMPS{<:ITensorMPS.MPS,Truncated}
+    end
+end
+
+@testset "Error Handling" begin
+    N = 2
+    max_occ = 5
+    sites1 = ITensors.siteinds("Boson", N; dim=max_occ+1)
+    sites2 = ITensors.siteinds("Boson", N; dim=max_occ+1)  
+    
+    @testset "Dimension mismatches" begin
+        psi1 = random_bmps(sites1, Truncated())
+        psi2 = random_bmps(sites2, Truncated())
+        
+        @test_throws Exception psi1 + psi2
+    end
+    
+    @testset "Invalid coherent state inputs" begin
+        @test_throws ErrorException coherentstate(sites1, [0.1], Truncated())
+    end
+    
+    @testset "DMRG with incompatible types" begin
+        H1 = harmonic_chain(sites1; ω=1.0)
+        psi2 = random_bmps(sites2, Truncated())
+        
+        @test_throws Exception dmrg(H1, psi2; nsweeps=2)
+    end
+end
+
+@testset "Bosonic Commutation Relations" begin
+    max_occ = 10
+    sites = ITensors.siteinds("Boson", 1; dim=max_occ+1)
+    site = sites[1]
+    a = destroy(site)
+    a_dag = create(site)
+    @testset "Commutator on Fock states" begin
+        for n in 0:5
+            psi_n = BMPS(sites, [n+1], Truncated())
+        
+            adag_a_psi = ITensors.apply(a, psi_n.mps)
+            adag_a_psi = ITensors.apply(a_dag, adag_a_psi)
+            exp1 = real(ITensors.inner(psi_n.mps, adag_a_psi))
+            @test abs(exp1 - n) < 1e-10
+            
+            a_adag_psi = ITensors.apply(a_dag, psi_n.mps)
+            a_adag_psi = ITensors.apply(a, a_adag_psi)
+            exp2 = real(ITensors.inner(psi_n.mps, a_adag_psi))
+            @test abs(exp2 - (n+1)) < 1e-10
+            
+            commutator_value = exp2 - exp1
+            @test abs(commutator_value - 1.0) < 1e-10
+        end
+    end
+    
+    @testset "Number operator relation" begin
+        for n in 0:5
+            psi_n = BMPS(sites, [n+1], Truncated())
+            n_op = number(site)
+            n_psi = ITensors.apply(n_op, psi_n.mps)
+            n_exp = real(ITensors.inner(psi_n.mps, n_psi))
+            adag_a_psi = ITensors.apply(a, psi_n.mps)
+            adag_a_psi = ITensors.apply(a_dag, adag_a_psi)
+            adag_a_exp = real(ITensors.inner(psi_n.mps, adag_a_psi))
+            @test abs(n_exp - adag_a_exp) < 1e-10
+        end
+    end
+end
+
+@testset "Coherent State Physics" begin
+    max_occ = 10
+    sites = ITensors.siteinds("Boson", 1; dim=max_occ+1)
+    α = 2.0 + 1.0im
+    
+    psi_coherent = coherentstate(sites, α, Truncated())
+    
+    @testset "Photon number expectation" begin
+        n_expectation = real(ITensorMPS.expect(psi_coherent.mps, "N"; sites=1))
+        @test abs(n_expectation - abs2(α)) < 0.2
+    end
+    
+    @testset "Normalized state" begin
+        @test abs(norm(psi_coherent) - 1.0) < 1e-8
+    end
+    
+    @testset "Non-zero for all relevant Fock states" begin
+        a_op = destroy(sites[1])
+        a_psi = ITensors.apply(a_op, psi_coherent.mps)
+        @test norm(a_psi) > 0 
+        
+        a_dag_op = create(sites[1])
+        adag_psi = ITensors.apply(a_dag_op, psi_coherent.mps)
+        @test norm(adag_psi) > 0  
+    end
+end
+
+@testset "DMRG Energy Accuracy" begin
+    N = 4
+    max_occ = 10
+    sites = ITensors.siteinds("Boson", N; dim=max_occ+1)
+    ω = 1.0
+    H = harmonic_chain(sites; ω=ω, J=0.0)
+    psi0 = random_bmps(sites, Truncated(); linkdims=10)
+    
+    energy, psi_gs = Mabs.dmrg(H, psi0; nsweeps=20, maxdim=50, cutoff=1e-12)
+    
+    expected_energy = 0.0  
+    @test abs(energy - expected_energy) < 0.01
+end
+
+@testset "Operator Action Accuracy" begin
+    max_occ = 10
+    sites = ITensors.siteinds("Boson", 1; dim=max_occ+1)
+    
+    @testset "Number operator eigenvalues" begin
+        n_op = number(sites[1])
+        
+        for n in 0:5
+            psi_n = BMPS(sites, [n+1], Truncated())
+            n_psi = ITensors.apply(n_op, psi_n.mps)
+            
+            expectation = real(ITensors.inner(psi_n.mps, n_psi))
+            @test abs(expectation - n) < 1e-12
+        end
+    end
+    
+    @testset "Ladder operator norms" begin
+        a = destroy(sites[1])
+        a_dag = create(sites[1])
+        
+        for n in 1:5
+            psi_n = BMPS(sites, [n+1], Truncated())
+            
+            a_psi = ITensors.apply(a, psi_n.mps)
+            @test abs(norm(a_psi) - sqrt(n)) < 1e-10
+            
+            adag_psi = ITensors.apply(a_dag, psi_n.mps)
+            @test abs(norm(adag_psi) - sqrt(n+1)) < 1e-10
+        end
+    end
+end
+
+@testset "Time Evolution Accuracy" begin
+    max_occ = 8
+    sites = ITensors.siteinds("Boson", 1; dim=max_occ+1)
+    
+    @testset "Number operator evolution" begin
+        ω = 1.0
+        dt = 0.5
+        n = 2
+        
+        psi_n = BMPS(sites, [n+1], Truncated())
+        normalize!(psi_n)
+        
+        n_op = number(sites[1])
+        gate = exp(-1im * dt * ω * n_op)
+        
+        psi_evolved = tebd(psi_n, gate)
+        
+        overlap = ITensors.inner(psi_n.mps, psi_evolved.mps)
+        expected_phase = exp(-1im * ω * dt * n)
+        @test abs(overlap - expected_phase) < 1e-10
+    end
+end
+
+@testset "Operator Action Accuracy" begin
+    max_occ = 10
+    sites = ITensors.siteinds("Boson", 1; dim=max_occ+1)
+    
+    @testset "Number operator eigenvalues" begin
+        n_op = number(sites[1])
+        
+        for n in 0:5
+            psi_n = BMPS(sites, [n+1], Truncated())
+            n_psi = ITensors.apply(n_op, psi_n.mps)
+            
+            expectation = real(ITensors.inner(psi_n.mps, n_psi))
+            @test abs(expectation - n) < 1e-12
+        end
+    end
+    
+    @testset "Ladder operator norms" begin
+        a = destroy(sites[1])
+        a_dag = create(sites[1])
+        
+        for n in 1:5
+            psi_n = BMPS(sites, [n+1], Truncated())
+            
+            a_psi = ITensors.apply(a, psi_n.mps)
+            @test abs(norm(a_psi) - sqrt(n)) < 1e-10
+            
+            adag_psi = ITensors.apply(a_dag, psi_n.mps)
+            @test abs(norm(adag_psi) - sqrt(n+1)) < 1e-10
+        end
+    end
+end
+
+@testset "Time Evolution Accuracy" begin
+    max_occ = 8
+    sites = ITensors.siteinds("Boson", 1; dim=max_occ+1)
+    
+    @testset "Number operator evolution phase" begin
+        ω = 1.0
+        dt = 0.5
+        n = 2
+        psi_n = BMPS(sites, [n+1], Truncated())
+        normalize!(psi_n)
+        n_op = number(sites[1])
+        gate = exp(-1im * dt * ω * n_op)
+        psi_evolved = tebd(psi_n, gate)
+        overlap = ITensors.inner(psi_n.mps, psi_evolved.mps)
+        expected_phase = exp(-1im * ω * dt * n)
+        @test abs(overlap - expected_phase) < 1e-10
     end
 end
 end

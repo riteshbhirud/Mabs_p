@@ -41,6 +41,9 @@ Keyword Arguments:
 
 Returns:
 - Tuple: (energy::Real, psi_excited::BMPS) - excited state energy and state
+
+Note: The returned energy includes the penalty term. For the true H expectation value,
+compute it separately with inner(psi', H, psi).
 """
 function dmrg(
     H::BMPO{<:ITensorMPS.MPO,Truncated}, 

@@ -11,7 +11,7 @@ export BMPS, BMPO, MabsAlg
 export Truncated, PseudoSite, LocalBasis
 
 #  algorithms  
-export dmrg, tebd!, tebd, tdvp
+export dmrg, tebd, tdvp
 
 #  constructors
 export random_bmps
@@ -21,7 +21,6 @@ export vacuumstate, coherentstate
 export create, destroy, number
 export displace, squeeze, kerr
 export harmonic_chain, kerr
-export build_trotter_gates, build_evolution_gate  
 export safe_factorial
 export add
 
