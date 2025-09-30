@@ -14,3 +14,9 @@ ITensorMPS = "0.3.19"
 ITensors = "0.7.7, 0.9.9"
 LinearAlgebra = "1.11.0"
 QuantumInterface = "0.3.7, 0.3.8, 0.4.1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

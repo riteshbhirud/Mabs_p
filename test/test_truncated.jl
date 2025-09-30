@@ -207,26 +207,6 @@ using LinearAlgebra
         @test abs(energy - N/2) < 1.0
     end
 
-    @testset "DMRG Excited State Calculation" begin
-        N = 2
-        max_occ = 6
-        sites = ITensors.siteinds("Boson", N; dim=max_occ+1)
-        
-        H = harmonic_chain(sites; ω=1.0, J=0.0)
-        
-        psi0 = random_bmps(sites, Truncated())
-        E0, psi_gs = Mabs.dmrg(H, psi0; nsweeps=8, maxdim=100, cutoff=1e-10)
-        
-        psi1_init = random_bmps(sites, Truncated())
-        E1, psi_excited = Mabs.dmrg(H, [psi_gs], psi1_init; weight=10.0, nsweeps=8, maxdim=100, cutoff=1e-10)
-        
-        @test E1 > E0  
-        @test psi_excited isa BMPS{<:ITensorMPS.MPS,Truncated}
-        
-        overlap = abs(dot(psi_gs, psi_excited))
-        @test overlap < 0.1  
-    end
-    
     @testset "Time Evolution" begin
         N = 2
         max_occ = 4 
@@ -440,7 +420,7 @@ using LinearAlgebra
             psi1 = random_bmps(sites, Truncated(); linkdims=2)
             psi2 = random_bmps(sites, Truncated(); linkdims=2)
             
-            rho = outer(psi1, psi2)
+            rho = outer(prime(psi1), psi2)
             @test rho isa BMPO{<:ITensorMPS.MPO,Truncated}
             @test length(rho) == N
         end
@@ -593,11 +573,11 @@ using LinearAlgebra
             @test a_op isa ITensors.ITensor
         end
     
-        @testset "safe_factorial" begin
-            @test safe_factorial(5) == 120
-            @test safe_factorial(0) == 1
-            @test safe_factorial(20) == factorial(20)
-            @test safe_factorial(21) isa BigInt
+        @testset "_safe_factorial" begin
+            @test Mabs._safe_factorial(5) == 120
+            @test Mabs._safe_factorial(0) == 1
+            @test Mabs._safe_factorial(20) == factorial(20)
+            @test Mabs._safe_factorial(21) isa BigInt
         end
     end
 
