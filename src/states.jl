@@ -1,7 +1,7 @@
 """
     random_bmps(sites::Vector{<:ITensors.Index}, alg::Truncated; kwargs...)
 
-Create a random bosonic MPS using the Truncated algorithm.
+Create a random bosonic MPS using the `Truncated` algorithm.
 
 Arguments:
 - sites::Vector{<:ITensors.Index}: Vector of site indices
@@ -36,7 +36,7 @@ end
     coherentstate(sites::Vector{<:ITensors.Index}, α::Number, alg::Truncated)
     coherentstate(sites::Vector{<:ITensors.Index}, αs::Vector{<:Number}, alg::Truncated)
 
-Create an approximate coherent state BMPS using truncated expansion.
+Create an approximate coherent state `BMPS` using truncated expansion.
 
 Arguments:
 - sites::Vector{<:ITensors.Index}: Vector of site indices
@@ -55,46 +55,46 @@ end
 function coherentstate(sites::Vector{<:ITensors.Index}, αs::Vector{<:Number}, alg::Truncated)
     N = length(sites)
     length(αs) == N || error("Number of amplitudes ($(length(αs))) must match number of sites ($N)")
-    tensors = ITensors.ITensor[]
-    for (i, site) in enumerate(sites)
+    tensors = Vector{ITensors.ITensor}(undef, N)
+    @inbounds for (i, site) in enumerate(sites)
         α = αs[i]
         max_occ = ITensors.dim(site) - 1
-        coeffs = ComplexF64[]
+        coeffs = Vector{ComplexF64}(undef, max_occ+1)
         normalization = exp(-abs2(α)/2)
-        for n in 0:max_occ
+        @inbounds for n in 0:max_occ
             coeff = normalization * (α^n) / sqrt(safe_factorial(n))
-            push!(coeffs, convert(ComplexF64, coeff))
+            coeffs[n+1] = convert(ComplexF64, coeff)
         end
         norm_factor = sqrt(sum(abs2, coeffs))
         coeffs ./= norm_factor
         if i == 1
             if N == 1
                 tensor = ITensors.ITensor(ComplexF64, site)
-                for n in 0:max_occ
+                @inbounds for n in 0:max_occ
                     tensor[n+1] = coeffs[n+1]
                 end
             else
                 right_link = ITensors.Index(1, "Link,l=$i")
                 tensor = ITensors.ITensor(ComplexF64, site, right_link)
-                for n in 0:max_occ
+                @inbounds for n in 0:max_occ
                     tensor[n+1, 1] = coeffs[n+1]
                 end
             end
         elseif i == N
             left_link = ITensors.Index(1, "Link,l=$(i-1)")
             tensor = ITensors.ITensor(ComplexF64, left_link, site)
-            for n in 0:max_occ
+            @inbounds for n in 0:max_occ
                 tensor[1, n+1] = coeffs[n+1]
             end
         else
             left_link = ITensors.Index(1, "Link,l=$(i-1)")
             right_link = ITensors.Index(1, "Link,l=$i")
             tensor = ITensors.ITensor(ComplexF64, left_link, site, right_link)
-            for n in 0:max_occ
+            @inbounds for n in 0:max_occ
                 tensor[1, n+1, 1] = coeffs[n+1]
             end
         end
-        push!(tensors, tensor)
+        tensors[i] = tensor
     end
     mps = ITensorMPS.MPS(tensors)
     return BMPS(mps, alg)
