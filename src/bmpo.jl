@@ -65,9 +65,32 @@ Base.setindex!(bmpo::BMPO, val, i) = (bmpo.mpo[i] = val)
 Base.firstindex(bmpo::BMPO) = Base.firstindex(bmpo.mpo)
 Base.lastindex(bmpo::BMPO) = Base.lastindex(bmpo.mpo)
 
-for f in TRUNCATED_FORWARDED_FUNCTIONS
+for f in [
+    :(ITensorMPS.findsite),
+    :(ITensorMPS.findsites),
+    :(ITensorMPS.firstsiteinds),
+    :(ITensorMPS.expect),
+    :(ITensorMPS.inner),
+    :(LinearAlgebra.dot),
+    :(ITensorMPS.loginner),
+    :(ITensorMPS.logdot),
+    :(LinearAlgebra.norm),
+    :(ITensorMPS.lognorm),
+    :(Base.collect),
+    :(Base.length),
+    :(Base.size)
+]
     @eval ($f)(bmpo::BMPO{<:ITensorMPS.MPO,Truncated}) = ($f)(bmpo.mpo)
     @eval ($f)(bmpo::BMPO{<:ITensorMPS.MPO,Truncated}, args...; kwargs...) = ($f)(bmpo.mpo, args...; kwargs...)
+end
+for f in [
+    :(ITensors.prime),
+    :(ITensors.swapprime),
+    :(ITensors.setprime),
+    :(ITensors.noprime),
+    :(ITensors.dag),
+]
+    @eval ($f)(bmpo::BMPO{<:ITensorMPS.MPO,Truncated}) = BMPO(($f)(bmpo.mpo), bmpo.alg)
 end
 
 """

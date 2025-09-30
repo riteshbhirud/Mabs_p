@@ -43,12 +43,7 @@ for f in [
     :(ITensorMPS.findsite),
     :(ITensorMPS.findsites),
     :(ITensorMPS.firstsiteinds),
-    :(ITensors.prime),
-    :(ITensors.swapprime),
-    :(ITensors.setprime),
-    :(ITensors.noprime),
     :(ITensorMPS.expect),
-    :(ITensors.dag),
     :(ITensorMPS.inner),
     :(LinearAlgebra.dot),
     :(ITensorMPS.loginner),
@@ -62,6 +57,16 @@ for f in [
     @eval ($f)(bmps::BMPS{<:ITensorMPS.MPS,Truncated}) = ($f)(bmps.mps)
     @eval ($f)(bmps::BMPS{<:ITensorMPS.MPS,Truncated}, args...; kwargs...) = ($f)(bmps.mps, args...; kwargs...)
 end
+for f in [
+    :(ITensors.prime),
+    :(ITensors.swapprime),
+    :(ITensors.setprime),
+    :(ITensors.noprime),
+    :(ITensors.dag)
+]
+    @eval ($f)(bmps::BMPS{<:ITensorMPS.MPS,Truncated}) = BMPS(($f)(bmps.mps), bmps.alg)
+end
+
 
 Base.copy(bmps::BMPS) = BMPS(copy(bmps.mps), bmps.alg)
 Base.deepcopy(bmps::BMPS) = BMPS(deepcopy(bmps.mps), bmps.alg)
@@ -171,7 +176,7 @@ function Base.:(+)(
     bmps2::BMPS{<:ITensorMPS.MPS,Truncated}; 
     kwargs...
 )
-    result_mps = Base.:(+)(bmps1, bmps2; kwargs...)
+    result_mps = Base.:(+)(bmps1.mps, bmps2.mps; kwargs...)
     return BMPS(result_mps, bmps1.alg)
 end
 function ITensorMPS.add(

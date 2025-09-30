@@ -11,7 +11,7 @@ Returns:
 - BMPS: Random bosonic MPS
 """
 function random_bmps(sites::Vector{<:ITensors.Index}, alg::Truncated; linkdims = 1)
-    mps = ITensorMPS.randomMPS(sites; linkdims)
+    mps = ITensorMPS.random_mps(sites; linkdims)
     return BMPS(mps, alg)
 end
 
@@ -62,7 +62,7 @@ function coherentstate(sites::Vector{<:ITensors.Index}, αs::Vector{<:Number}, a
         coeffs = Vector{ComplexF64}(undef, max_occ+1)
         normalization = exp(-abs2(α)/2)
         @inbounds for n in 0:max_occ
-            coeff = normalization * (α^n) / sqrt(safe_factorial(n))
+            coeff = normalization * (α^n) / sqrt(_safe_factorial(n))
             coeffs[n+1] = convert(ComplexF64, coeff)
         end
         norm_factor = sqrt(sum(abs2, coeffs))
