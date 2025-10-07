@@ -23,3 +23,21 @@ function dmrg(
     energy, converged_mps = ITensorMPS.dmrg(H.mpo, psi0.mps; nsweeps=nsweeps, kwargs...)
     return energy, BMPS(converged_mps, psi0.alg)
 end
+
+
+"""
+    dmrg(H::BMPO{<:ITensorMPS.MPO,PseudoSite}, psi0::BMPS{<:ITensorMPS.MPS,PseudoSite}; nsweeps::Int, kwargs...)
+
+Perform DMRG on PseudoSite representation.
+"""
+function dmrg(
+    H::BMPO{<:ITensorMPS.MPO,<:PseudoSite},  
+    psi0::BMPS{<:ITensorMPS.MPS,<:PseudoSite};  
+    nsweeps::Int,
+    kwargs...
+)
+    H.alg == psi0.alg || throw(ArgumentError("Algorithms must match"))
+    
+    energy, converged_mps = ITensorMPS.dmrg(H.mpo, psi0.mps; nsweeps=nsweeps, kwargs...)
+    return energy, BMPS(converged_mps, psi0.alg)
+end
