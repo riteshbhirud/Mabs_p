@@ -207,63 +207,33 @@ function kerr(sites::Vector{<:ITensors.Index}; ω::Real=1.0, χ::Real=0.1)
     return BMPO(mpo, Truncated())
 end
 
-"""
-    create(site::ITensors.Index, alg::PseudoSite, mode::Int)
-
-Create bosonic creation operator for mode in PseudoSite representation.
-"""
-function create(::ITensors.Index, alg::PseudoSite, mode::Int)
-    cluster_sites = get_mode_cluster(alg, mode)
+function create(sites::Vector{<:ITensors.Index}, alg::PseudoSite, mode::Int)
+    cluster_sites = get_mode_cluster(sites, alg, mode)
     return create_op_quantics(cluster_sites)
 end
 
-"""
-    destroy(site::ITensors.Index, alg::PseudoSite, mode::Int)
-
-Create bosonic annihilation operator for mode in PseudoSite representation.
-"""
-function destroy(::ITensors.Index, alg::PseudoSite, mode::Int)
-    cluster_sites = get_mode_cluster(alg, mode)
+function destroy(sites::Vector{<:ITensors.Index}, alg::PseudoSite, mode::Int)
+    cluster_sites = get_mode_cluster(sites, alg, mode)
     return destroy_op_quantics(cluster_sites)
 end
 
-"""
-    number(site::ITensors.Index, alg::PseudoSite, mode::Int)
-
-Create bosonic number operator for mode in PseudoSite representation.
-"""
-function number(::ITensors.Index, alg::PseudoSite, mode::Int)
-    cluster_sites = get_mode_cluster(alg, mode)
+function number(sites::Vector{<:ITensors.Index}, alg::PseudoSite, mode::Int)
+    cluster_sites = get_mode_cluster(sites, alg, mode)
     return number_op_quantics(cluster_sites)
 end
 
-"""
-    displace(site::ITensors.Index, α::Number, alg::PseudoSite, mode::Int)
-
-Create displacement operator for mode in PseudoSite representation.
-"""
-function displace(::ITensors.Index, α::Number, alg::PseudoSite, mode::Int)
-    cluster_sites = get_mode_cluster(alg, mode)
+function displace(sites::Vector{<:ITensors.Index}, α::Number, alg::PseudoSite, mode::Int)
+    cluster_sites = get_mode_cluster(sites, alg, mode)
     return displace_op_quantics(cluster_sites, α)
 end
 
-"""
-    squeeze(site::ITensors.Index, ξ::Number, alg::PseudoSite, mode::Int)
-
-Create squeeze operator for mode in PseudoSite representation.
-"""
-function squeeze(::ITensors.Index, ξ::Number, alg::PseudoSite, mode::Int)
-    cluster_sites = get_mode_cluster(alg, mode)
+function squeeze(sites::Vector{<:ITensors.Index}, ξ::Number, alg::PseudoSite, mode::Int)
+    cluster_sites = get_mode_cluster(sites, alg, mode)
     return squeeze_op_quantics(cluster_sites, ξ)
 end
 
-"""
-    kerr(site::ITensors.Index, χ::Real, t::Real, alg::PseudoSite, mode::Int)
-
-Create Kerr evolution operator for mode in PseudoSite representation.
-"""
-function kerr(::ITensors.Index, χ::Real, t::Real, alg::PseudoSite, mode::Int)
-    cluster_sites = get_mode_cluster(alg, mode)
+function kerr(sites::Vector{<:ITensors.Index}, χ::Real, t::Real, alg::PseudoSite, mode::Int)
+    cluster_sites = get_mode_cluster(sites, alg, mode)
     return kerr_op_quantics(cluster_sites, χ, t)
 end
 
@@ -273,15 +243,18 @@ end
 Build harmonic chain Hamiltonian in PseudoSite representation.
 H = Σᵢ ω*nᵢ + J*Σᵢ (aᵢ†aᵢ₊₁ + h.c.)
 
-Note: Hopping terms (J ≠ 0) not yet implemented for PseudoSite.
 """
 function harmonic_chain(sites::Vector{<:ITensors.Index}, alg::PseudoSite; ω::Real=1.0, J::Real=0.0)
-    sites == alg.sites || throw(ArgumentError("Sites must match algorithm"))
+    n_expected = alg.n_modes * n_qubits_per_mode(alg)
+    length(sites) == n_expected || throw(ArgumentError("Sites must match algorithm"))
+    
     opsum = ITensors.OpSum()
+    n_qubits = n_qubits_per_mode(alg)
+    
     for mode in 1:alg.n_modes
-        for i in 1:alg.n_qubits_per_mode
+        for i in 1:n_qubits
             weight = ω * 2^(i-1)
-            global_idx = (mode - 1) * alg.n_qubits_per_mode + i
+            global_idx = (mode - 1) * n_qubits + i
             opsum += weight, "N", global_idx
         end
     end
@@ -303,21 +276,23 @@ Build Kerr nonlinearity Hamiltonian in PseudoSite representation.
 H = Σᵢ (ω*nᵢ + χ*nᵢ²)
 """
 function kerr(sites::Vector{<:ITensors.Index}, alg::PseudoSite; ω::Real=1.0, χ::Real=0.1)
-    sites == alg.sites || throw(ArgumentError("Sites must match algorithm"))
+    n_expected = alg.n_modes * n_qubits_per_mode(alg)
+    length(sites) == n_expected || throw(ArgumentError("Sites must match algorithm"))
     
     opsum = ITensors.OpSum()
+    n_qubits = n_qubits_per_mode(alg)
     
     for mode in 1:alg.n_modes
-        for i in 1:alg.n_qubits_per_mode
+        for i in 1:n_qubits
             weight = ω * 2^(i-1)
-            global_idx = (mode - 1) * alg.n_qubits_per_mode + i
+            global_idx = (mode - 1) * n_qubits + i
             opsum += weight, "N", global_idx
         end
-        for i in 1:alg.n_qubits_per_mode
-            for j in 1:alg.n_qubits_per_mode
+        for i in 1:n_qubits
+            for j in 1:n_qubits
                 weight = χ * 2^(i + j - 2)
-                idx_i = (mode - 1) * alg.n_qubits_per_mode + i
-                idx_j = (mode - 1) * alg.n_qubits_per_mode + j
+                idx_i = (mode - 1) * n_qubits + i
+                idx_j = (mode - 1) * n_qubits + j
                 
                 if i == j
                     opsum += weight, "N", idx_i

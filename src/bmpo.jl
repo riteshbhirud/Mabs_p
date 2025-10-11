@@ -291,8 +291,9 @@ end
 Create BMPO from existing MPO using PseudoSite algorithm.
 """
 function BMPO(mpo::ITensorMPS.MPO, alg::PseudoSite)
-    length(mpo) == length(alg.sites) || 
-        throw(ArgumentError("MPO length doesn't match PseudoSite sites"))
+    n_expected = alg.n_modes * n_qubits_per_mode(alg)
+    length(mpo) == n_expected || 
+        throw(ArgumentError("MPO length $(length(mpo)) doesn't match expected $n_expected"))
     
     return BMPO{typeof(mpo), typeof(alg)}(mpo, alg)
 end
@@ -307,8 +308,10 @@ Multi-site operators (Adag, A) are not yet supported via OpSum.
 Use explicit operator construction instead.
 """
 function BMPO(opsum::ITensors.OpSum, sites::Vector{<:ITensors.Index}, alg::PseudoSite)
-    sites == alg.sites || 
-        throw(ArgumentError("Sites must match algorithm specification"))
+    n_expected = alg.n_modes * n_qubits_per_mode(alg)
+    length(sites) == n_expected || 
+        throw(ArgumentError("Sites length $(length(sites)) must match expected $n_expected"))
+    
     quantics_opsum = _convert_opsum_to_quantics(opsum, alg)
     mpo = ITensorMPS.MPO(quantics_opsum, sites)
     return BMPO{typeof(mpo), typeof(alg)}(mpo, alg)
@@ -323,16 +326,17 @@ Currently supports: N (number), Id (identity)
 function _convert_opsum_to_quantics(opsum::ITensors.OpSum, alg::PseudoSite)
     quantics_opsum = ITensors.OpSum()
     opsum_terms = opsum.data
+    n_qubits = n_qubits_per_mode(alg)
+    
     for term in opsum_terms
         coeff = term.coef
         ops = term.ops
         sites_in_term = term.sites
         for (op_name, site_idx) in zip(ops, sites_in_term)
             if op_name == "N"
-                cluster_sites = get_mode_cluster(alg, site_idx)
-                for (i, _) in enumerate(cluster_sites)
+                for i in 1:n_qubits
                     weight = coeff * 2^(i-1)
-                    global_qubit_idx = (site_idx - 1) * alg.n_qubits_per_mode + i
+                    global_qubit_idx = (site_idx - 1) * n_qubits + i
                     quantics_opsum += weight, "N", global_qubit_idx
                 end
             elseif op_name == "Id"

@@ -263,8 +263,9 @@ end
 Create BMPS from existing MPS using PseudoSite algorithm.
 """
 function BMPS(mps::ITensorMPS.MPS, alg::PseudoSite)
-    length(mps) == length(alg.sites) || 
-        throw(ArgumentError("MPS length $(length(mps)) doesn't match PseudoSite sites $(length(alg.sites))"))
+    n_expected = alg.n_modes * n_qubits_per_mode(alg)
+    length(mps) == n_expected || 
+        throw(ArgumentError("MPS length $(length(mps)) doesn't match expected $n_expected"))
     
     return BMPS{typeof(mps), typeof(alg)}(mps, alg)
 end
@@ -283,18 +284,22 @@ Returns:
 - BMPS: Product state in quantics representation
 """
 function BMPS(sites::Vector{<:ITensors.Index}, states::Vector, alg::PseudoSite)
-    sites == alg.sites || 
-        throw(ArgumentError("Sites must match algorithm specification"))
+    n_expected = alg.n_modes * n_qubits_per_mode(alg)
+    length(sites) == n_expected || 
+        throw(ArgumentError("Sites length $(length(sites)) must match expected $n_expected"))
     
     length(states) == alg.n_modes || 
         throw(ArgumentError("Number of states $(length(states)) must match modes $(alg.n_modes))"))
     
+    n_qubits = n_qubits_per_mode(alg)
     binary_states = Int[]
+    sizehint!(binary_states, n_expected)  # Pre-allocate
+    
     for (mode_idx, n) in enumerate(states)
-        n <= alg.original_max_occ || 
-            throw(ArgumentError("State $n exceeds maximum $(alg.original_max_occ)"))
+        n <= alg.fock_cutoff || 
+            throw(ArgumentError("State $n exceeds maximum $(alg.fock_cutoff)"))
         
-        binary_state = decimal_to_binary_state(n, alg.n_qubits_per_mode)
+        binary_state = decimal_to_binary_state(n, n_qubits)
         append!(binary_states, binary_state)
     end
     

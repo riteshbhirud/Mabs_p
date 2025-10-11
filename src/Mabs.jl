@@ -21,13 +21,8 @@ export create, destroy, number,
        displace, squeeze, kerr,
        harmonic_chain,
        add
+export n_qubits_per_mode, create_qubit_sites
 
-# PseudoSite specific
-export get_mode_cluster, get_mode_indices,
-       decimal_to_binary_state, binary_state_to_decimal,
-       number_op_quantics, create_op_quantics, destroy_op_quantics,
-       displace_op_quantics, squeeze_op_quantics, kerr_op_quantics
-export expect_photon_number
 
 include("algs.jl")
 include("throws.jl")

@@ -281,7 +281,8 @@ Returns:
 """
 function expect_photon_number(psi::BMPS{<:ITensorMPS.MPS,<:PseudoSite}, mode::Int)
     alg = psi.alg
-    cluster_sites = get_mode_cluster(alg, mode)
+    sites = ITensorMPS.siteinds(psi.mps)
+    cluster_sites = get_mode_cluster(sites, alg, mode)
     n_op = number_op_quantics(cluster_sites)
     n_psi = ITensors.apply(n_op, psi.mps)
     return real(ITensorMPS.inner(psi.mps, n_psi))
@@ -297,16 +298,19 @@ function build_hopping_mpo(
     mode_i::Int,
     coeff::Number
 )
+    n_qubits = n_qubits_per_mode(alg)
+    max_occ = alg.fock_cutoff
+    
     mode_j = mode_i + 1
     if mode_j > alg.n_modes
         error("Mode index out of range")
     end
-    start_i = (mode_i - 1) * alg.n_qubits_per_mode + 1
-    end_i = mode_i * alg.n_qubits_per_mode
-    start_j = (mode_j - 1) * alg.n_qubits_per_mode + 1
-    end_j = mode_j * alg.n_qubits_per_mode
+    start_i = (mode_i - 1) * n_qubits + 1
+    end_i = mode_i * n_qubits
+    start_j = (mode_j - 1) * n_qubits + 1
+    end_j = mode_j * n_qubits
     n_total = length(sites)
-    max_occ = alg.original_max_occ
+    
     terms = ITensorMPS.MPO[]
     for ni in 0:max_occ, nj in 0:max_occ
         if ni >= max_occ  
@@ -319,10 +323,10 @@ function build_hopping_mpo(
         if abs(mat_elem) < 1e-15
             continue
         end
-        bra_states_i = decimal_to_binary_state(ni, alg.n_qubits_per_mode)
-        bra_states_j = decimal_to_binary_state(nj, alg.n_qubits_per_mode)
-        ket_states_i = decimal_to_binary_state(ni + 1, alg.n_qubits_per_mode)
-        ket_states_j = decimal_to_binary_state(nj - 1, alg.n_qubits_per_mode)
+        bra_states_i = decimal_to_binary_state(ni, n_qubits)
+        bra_states_j = decimal_to_binary_state(nj, n_qubits)
+        ket_states_i = decimal_to_binary_state(ni + 1, n_qubits)
+        ket_states_j = decimal_to_binary_state(nj - 1, n_qubits)
         mpo_tensors = Vector{ITensors.ITensor}(undef, n_total)
         for site_idx in 1:n_total
             s = sites[site_idx]
@@ -361,10 +365,10 @@ function build_hopping_mpo(
         if abs(mat_elem) < 1e-15
             continue
         end
-        bra_states_i = decimal_to_binary_state(ni, alg.n_qubits_per_mode)
-        bra_states_j = decimal_to_binary_state(nj, alg.n_qubits_per_mode)
-        ket_states_i = decimal_to_binary_state(ni - 1, alg.n_qubits_per_mode)
-        ket_states_j = decimal_to_binary_state(nj + 1, alg.n_qubits_per_mode)
+        bra_states_i = decimal_to_binary_state(ni, n_qubits)
+        bra_states_j = decimal_to_binary_state(nj, n_qubits)
+        ket_states_i = decimal_to_binary_state(ni - 1, n_qubits)
+        ket_states_j = decimal_to_binary_state(nj + 1, n_qubits)
         mpo_tensors = Vector{ITensors.ITensor}(undef, n_total)
         for site_idx in 1:n_total
             s = sites[site_idx]

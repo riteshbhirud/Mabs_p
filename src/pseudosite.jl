@@ -1,89 +1,89 @@
 """
-    PseudoSite{S<:Vector{ITensors.Index}} <: MabsAlg
+    PseudoSite <: MabsAlg
 
 Algorithm for representing bosonic systems using quantics (binary) mapping.
 Maps a bosonic Hilbert space of dimension 2^N to N qubits per mode.
 
 Fields:
-- sites::S: Vector of qubit site indices (N_qubits × N_modes total)
-- n_qubits_per_mode::Int: Number of qubits per bosonic mode
 - n_modes::Int: Number of bosonic modes
-- original_max_occ::Int: Maximum occupation in original bosonic space (2^N - 1)
+- fock_cutoff::Int: Maximum occupation in bosonic space (must be 2^N - 1)
 
 The quantics mapping represents occupation number states in binary:
 |n⟩ → |b_{N-1}⟩⊗|b_{N-2}⟩⊗...⊗|b_0⟩ where n = Σᵢ bᵢ × 2^i
 """
-struct PseudoSite{S<:Vector{ITensors.Index}} <: MabsAlg 
-    sites::S
-    n_qubits_per_mode::Int
+struct PseudoSite <: MabsAlg 
     n_modes::Int
-    original_max_occ::Int
+    fock_cutoff::Int
     
-    function PseudoSite(sites::Vector{ITensors.Index}, n_qubits_per_mode::Int, 
-                        n_modes::Int, original_max_occ::Int)
-        length(sites) == n_qubits_per_mode * n_modes || 
-            throw(ArgumentError("Site count mismatch: expected $(n_qubits_per_mode * n_modes), got $(length(sites))"))
-        original_max_occ == 2^n_qubits_per_mode - 1 || 
-            throw(ArgumentError(PSEUDOSITE_ERROR))
-        for site in sites
-            ITensors.dim(site) == 2 || 
-                throw(ArgumentError("All sites must be qubits (dimension 2)"))
-        end
-        return new{typeof(sites)}(sites, n_qubits_per_mode, n_modes, original_max_occ)
+    function PseudoSite(n_modes::Int, fock_cutoff::Int)
+        # Verify fock_cutoff is of form 2^N - 1
+        N = log2(fock_cutoff + 1)
+        isinteger(N) || throw(ArgumentError(PSEUDOSITE_ERROR))
+        
+        return new(n_modes, fock_cutoff)
     end
 end
 
 """
-    PseudoSite(n_modes::Int, max_occ::Int)
+    n_qubits_per_mode(alg::PseudoSite)
 
-Create PseudoSite algorithm specification for bosonic system.
+Get number of qubits needed per mode: log₂(fock_cutoff + 1)
+"""
+n_qubits_per_mode(alg::PseudoSite) = Int(log2(alg.fock_cutoff + 1))
 
-Arguments:
-- n_modes::Int: Number of bosonic modes
-- max_occ::Int: Maximum occupation number (must be 2^N - 1 for some integer N)
+"""
+    create_qubit_sites(alg::PseudoSite)
+
+Generate qubit sites for PseudoSite algorithm.
+Creates n_modes × n_qubits_per_mode qubit indices.
 
 Returns:
-- PseudoSite: Algorithm specification with generated qubit sites
+- Vector{ITensors.Index}: Qubit sites for the system
 """
-function PseudoSite(n_modes::Int, max_occ::Int)
-    N = log2(max_occ + 1)
-    isinteger(N) || throw(ArgumentError(PSEUDOSITE_ERROR))
-    N_qubits = Int(N)
-    sites = ITensors.Index[]
-    for mode in 1:n_modes
-        for qubit in 1:N_qubits
+function create_qubit_sites(alg::PseudoSite)
+    n_qubits = n_qubits_per_mode(alg)
+    n_total = alg.n_modes * n_qubits
+    sites = Vector{ITensors.Index}(undef, n_total)
+    
+    idx = 1
+    for mode in 1:alg.n_modes
+        for qubit in 1:n_qubits
             tag = "Qubit,Mode=$mode,Bit=$qubit"
-            push!(sites, ITensors.Index(2, tag))
+            sites[idx] = ITensors.Index(2, tag)
+            idx += 1
         end
     end
-    return PseudoSite(sites, N_qubits, n_modes, max_occ)
+    
+    return sites
 end
 
 function Base.:(==)(alg1::PseudoSite, alg2::PseudoSite)
-    return alg1.sites == alg2.sites &&
-           alg1.n_qubits_per_mode == alg2.n_qubits_per_mode &&
-           alg1.n_modes == alg2.n_modes &&
-           alg1.original_max_occ == alg2.original_max_occ
+    return alg1.n_modes == alg2.n_modes &&
+           alg1.fock_cutoff == alg2.fock_cutoff
 end
 
 """
-    get_mode_cluster(alg::PseudoSite, mode::Int)
+    get_mode_cluster(sites::Vector{<:ITensors.Index}, alg::PseudoSite, mode::Int)
 
 Get the qubit cluster indices for a specific bosonic mode.
 
 Arguments:
+- sites::Vector{ITensors.Index}: Qubit sites for the system
 - alg::PseudoSite: Algorithm specification
 - mode::Int: Mode number (1-indexed)
 
 Returns:
 - Vector{ITensors.Index}: Qubit sites for this mode
 """
-function get_mode_cluster(alg::PseudoSite, mode::Int)
+function get_mode_cluster(sites::Vector{<:ITensors.Index}, alg::PseudoSite, mode::Int)
     (mode < 1 || mode > alg.n_modes) && 
         throw(ArgumentError("Mode $mode out of range [1, $(alg.n_modes)]"))
-    start_idx = (mode - 1) * alg.n_qubits_per_mode + 1
-    end_idx = mode * alg.n_qubits_per_mode
-    return alg.sites[start_idx:end_idx]
+    
+    n_qubits = n_qubits_per_mode(alg)
+    start_idx = (mode - 1) * n_qubits + 1
+    end_idx = mode * n_qubits
+    
+    return sites[start_idx:end_idx]
 end
 
 """
@@ -102,8 +102,9 @@ function get_mode_indices(alg::PseudoSite, mode::Int)
     (mode < 1 || mode > alg.n_modes) && 
         throw(ArgumentError("Mode $mode out of range [1, $(alg.n_modes)]"))
     
-    start_idx = (mode - 1) * alg.n_qubits_per_mode + 1
-    end_idx = mode * alg.n_qubits_per_mode
+    n_qubits = n_qubits_per_mode(alg)
+    start_idx = (mode - 1) * n_qubits + 1
+    end_idx = mode * n_qubits
     
     return start_idx:end_idx
 end
